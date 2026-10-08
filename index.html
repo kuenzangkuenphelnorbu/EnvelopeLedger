@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EnvelopeLedger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --ink: #15172b;
+    --muted: #6b7088;
+    --faint: #a3a7bb;
+    --line: #eceef6;
+    --soft: #f6f7fc;
+    --accent: #5b5bf0;
+    --accent-soft: #eeeefe;
+    --good: #12935f;
+    --warn: #c27803;
+    --bad: #e0394b;
+    --needs: #5b8def;  --needs-t: #eaf1ff;
+    --wants: #ee7fa6;  --wants-t: #ffedf3;
+    --goals: #3fbf86;  --goals-t: #e6f8ef;
+    --shadow: 0 1px 2px rgba(21,23,43,.04), 0 12px 32px -16px rgba(21,23,43,.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--ink);
+    font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  svg.i { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 24px; }
+
+  /* Header */
+  header.top { position: sticky; top: 0; z-index: 20; background: rgba(255,255,255,.9); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+  header.top .wrap { height: 68px; display: flex; align-items: center; justify-content: space-between; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 18px; letter-spacing: -0.03em; }
+  .logo { width: 34px; height: 34px; border-radius: 11px; background: linear-gradient(135deg, #7c7cf7, #5b5bf0 55%, #3fbf86); color: #fff; display: grid; place-items: center; }
+  .logo svg { width: 18px; height: 18px; }
+  .actions { display: flex; gap: 8px; }
+
+  .btn { border: 1px solid var(--line); background: #fff; padding: 9px 16px; border-radius: 999px; font-weight: 600; font-size: 13px; transition: all .15s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn:hover { background: var(--soft); }
+  .btn.primary { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .btn.primary:hover { background: #2b2e4a; }
+  .btn.small { padding: 6px 12px; font-size: 12px; }
+  .link { background: none; border: 0; color: var(--accent); font-size: 13px; font-weight: 600; padding: 0; }
+  .link:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+  /* Cards */
+  .card { background: #fff; border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow); padding: 24px; }
+  .card-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
+  h2 { font-size: 16px; font-weight: 700; letter-spacing: -0.02em; }
+  .sub { color: var(--muted); font-size: 13px; }
+
+  /* Hero */
+  .top-area { padding: 32px 0 8px; display: grid; grid-template-columns: 1.6fr 1fr; gap: 20px; }
+  .hero { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 26px; padding: 32px;
+    background:
+      radial-gradient(420px 220px at 100% 0%, rgba(91,91,240,.14), transparent 70%),
+      radial-gradient(380px 220px at 0% 100%, rgba(63,191,134,.14), transparent 70%),
+      #fff;
+    box-shadow: var(--shadow); }
+  .hero-label { font-size: 14px; font-weight: 600; color: var(--muted); }
+  .hero-value { font-size: 60px; line-height: 1.05; font-weight: 800; letter-spacing: -0.045em; margin: 6px 0 4px; }
+  .hero-value.neg { color: var(--bad); }
+  .hero-value.zero { color: var(--faint); }
+  .hero-note { color: var(--muted); }
+  .alloc { margin-top: 28px; }
+  .alloc-title { font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+  .alloc-bar { display: flex; gap: 3px; height: 14px; }
+  .alloc-bar span { display: block; height: 100%; border-radius: 6px; min-width: 4px; transition: flex .4s ease; }
+  .alloc-bar .ready { background: repeating-linear-gradient(135deg, #e7e8fb 0 6px, #f1f2fd 6px 12px); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 12px; font-size: 12px; color: var(--muted); }
+  .legend b { color: var(--ink); font-weight: 600; margin-left: 4px; }
+  .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; }
+
+  .stat-stack { display: grid; gap: 12px; }
+  .stat { display: flex; align-items: center; gap: 14px; padding: 18px 20px; border: 1px solid var(--line); border-radius: 20px; background: #fff; box-shadow: var(--shadow); }
+  .chip-i { width: 42px; height: 42px; border-radius: 14px; display: grid; place-items: center; flex: none; }
+  .chip-i.blue { background: var(--needs-t); color: var(--needs); }
+  .chip-i.violet { background: var(--accent-soft); color: var(--accent); }
+  .chip-i.rose { background: var(--wants-t); color: var(--wants); }
+  .stat-label { color: var(--muted); font-size: 12px; font-weight: 500; }
+  .stat-value { font-size: 22px; font-weight: 700; letter-spacing: -0.03em; line-height: 1.2; }
+
+  /* Main grid */
+  .grid { display: grid; grid-template-columns: 340px 1fr; gap: 20px; padding: 20px 0; align-items: start; }
+  aside { display: grid; gap: 20px; }
+
+  .acc-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+  .acc-row + .acc-row { border-top: 1px solid var(--line); }
+  .acc-row .chip-i { width: 38px; height: 38px; border-radius: 12px; }
+  .acc-info { flex: 1; min-width: 0; }
+  .acc-name { font-weight: 600; font-size: 13px; }
+  .acc-type { color: var(--muted); font-size: 12px; }
+  .acc-bal { font-weight: 700; font-size: 14px; }
+  .acc-bal small { display: block; font-weight: 500; font-size: 11px; color: var(--warn); text-align: right; }
+
+  .chart-box { position: relative; height: 230px; }
+  .chart-box.empty canvas { display: none; }
+  .chart-empty { display: none; height: 100%; align-items: center; justify-content: center; text-align: center; color: var(--muted); border: 1px dashed #dcdff0; border-radius: 16px; padding: 0 16px; }
+  .chart-box.empty .chart-empty { display: flex; }
+
+  .empty { background: var(--soft); border-radius: 16px; padding: 20px; color: var(--muted); display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+
+  /* Envelopes */
+  .group + .group { margin-top: 28px; }
+  .group-title { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; margin-bottom: 12px; }
+  .group-title small { color: var(--muted); font-weight: 500; }
+  .env-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .g-Needs { --gc: var(--needs); --gt: var(--needs-t); }
+  .g-Wants { --gc: var(--wants); --gt: var(--wants-t); }
+  .g-Goals { --gc: var(--goals); --gt: var(--goals-t); }
+  .env { border: 1px solid var(--line); border-radius: 18px; padding: 16px; background: #fff; transition: border-color .15s, box-shadow .15s; }
+  .env:hover { border-color: #dcdff0; box-shadow: 0 8px 20px -14px rgba(21,23,43,.25); }
+  .env-top { display: flex; align-items: center; gap: 12px; }
+  .env-top .chip-i { width: 38px; height: 38px; border-radius: 12px; background: var(--gt); color: var(--gc); }
+  .env-title { flex: 1; min-width: 0; }
+  .env-name { font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .env-goal { color: var(--muted); font-size: 12px; }
+  .env-avail { text-align: right; font-weight: 800; font-size: 16px; letter-spacing: -0.02em; color: var(--good); line-height: 1.2; }
+  .env-avail.neg { color: var(--bad); }
+  .env-avail.zero { color: var(--faint); }
+  .env-avail small { display: block; font-weight: 500; font-size: 11px; color: var(--muted); letter-spacing: 0; }
+  .bar { height: 8px; background: var(--gt); border-radius: 999px; margin: 14px 0 8px; overflow: hidden; }
+  .bar > span { display: block; height: 100%; background: var(--gc); border-radius: 999px; transition: width .4s ease; }
+  .bar.warn { background: #fdf1da; } .bar.warn > span { background: #f2a93b; }
+  .bar.bad { background: #fde6e9; } .bar.bad > span { background: var(--bad); }
+  .env-meta { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+  .status-warn { color: var(--warn); font-weight: 600; }
+  .status-bad { color: var(--bad); font-weight: 600; }
+  .quick { display: flex; gap: 6px; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--line); }
+  .quick span { color: var(--muted); font-size: 12px; margin-right: auto; }
+  .pill-btn { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 600; transition: all .15s; }
+  .pill-btn:hover { background: var(--gt); border-color: transparent; color: var(--gc); }
+
+  /* Transactions */
+  .tx-card { margin: 8px 0 56px; }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; }
+  .field { border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 10px 14px; font-size: 13px; width: 100%; transition: border-color .15s, box-shadow .15s; }
+  .field:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+  .filters .field { width: auto; min-width: 190px; }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12px; padding: 10px 14px; background: var(--soft); white-space: nowrap; }
+  th:first-child { border-radius: 12px 0 0 12px; } th:last-child { border-radius: 0 12px 12px 0; }
+  td { padding: 14px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  th.r, td.r { text-align: right; }
+  td.payee { font-weight: 600; }
+  td.muted { color: var(--muted); }
+  td.amt { font-weight: 700; }
+  .tag { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--gt); color: var(--gc); }
+  .del { background: none; border: 0; color: var(--faint); font-size: 12px; font-weight: 600; padding: 4px 8px; border-radius: 8px; }
+  .del:hover { color: var(--bad); background: #fde6e9; }
+  .tx-empty { text-align: center; color: var(--muted); padding: 36px 0; white-space: normal; }
+
+  footer { border-top: 1px solid var(--line); padding: 20px 0 28px; color: var(--faint); font-size: 12px; }
+  footer .wrap { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+  footer .fl { display: flex; gap: 16px; }
+  footer button { background: none; border: 0; color: var(--muted); font-size: 12px; font-weight: 600; }
+  footer button:hover { color: var(--accent); }
+  footer button.danger:hover { color: var(--bad); }
+
+  /* Dialogs */
+  dialog { border: 0; border-radius: 24px; padding: 0; width: min(460px, calc(100vw - 32px)); margin: auto; box-shadow: 0 30px 80px rgba(21,23,43,.22); color: var(--ink); background: #fff; }
+  dialog::backdrop { background: rgba(21,23,43,.32); backdrop-filter: blur(3px); }
+  dialog form { padding: 28px; display: flex; flex-direction: column; gap: 16px; }
+  .dlg-head { display: flex; justify-content: space-between; align-items: center; }
+  .dlg-head h3 { font-size: 19px; font-weight: 800; letter-spacing: -0.03em; }
+  .x { background: var(--soft); border: 0; width: 32px; height: 32px; border-radius: 50%; font-size: 20px; line-height: 1; color: var(--muted); }
+  .x:hover { color: var(--ink); }
+  label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+  #toasts { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; z-index: 100; pointer-events: none; }
+  .toast { background: var(--ink); color: #fff; padding: 11px 18px; border-radius: 999px; font-size: 13px; font-weight: 500; box-shadow: 0 12px 30px rgba(21,23,43,.25); animation: tin .2s ease; }
+  .toast.error { background: var(--bad); }
+  @keyframes tin { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  @media (max-width: 980px) { .top-area { grid-template-columns: 1fr; } .stat-stack { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  @media (max-width: 640px) {
+    .wrap { padding: 0 16px; }
+    .hero { padding: 24px; } .hero-value { font-size: 46px; }
+    .env-grid { grid-template-columns: 1fr; }
+    .stat-stack { grid-template-columns: 1fr; }
+    .card { padding: 20px; }
+    .btn .lbl { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <div class="logo"><svg class="i" viewBox="0 0 24 24" style="stroke-width:2"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M3 10l9 5 9-5"/></svg></div>
+      EnvelopeLedger
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="openModal('envelopeModal')"><span>+</span><span class="lbl">New envelope</span></button>
+      <button class="btn primary" onclick="openExpense()"><span>&minus;</span><span class="lbl">Log expense</span></button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="top-area">
+    <div class="hero">
+      <div class="hero-label">Ready to assign</div>
+      <div id="readyVal" class="hero-value num">$0.00</div>
+      <div id="readyNote" class="hero-note"></div>
+      <div class="alloc" id="allocBlock">
+        <div class="alloc-title">Where your money sits</div>
+        <div class="alloc-bar" id="allocBar"></div>
+        <div class="legend" id="allocLegend"></div>
+      </div>
+    </div>
+    <div class="stat-stack">
+      <div class="stat">
+        <div class="chip-i blue" id="icoCash"></div>
+        <div><div class="stat-label">Cash on hand</div><div id="cashVal" class="stat-value num">$0.00</div></div>
+      </div>
+      <div class="stat">
+        <div class="chip-i violet" id="icoAssigned"></div>
+        <div><div class="stat-label">Assigned to envelopes</div><div id="assignedVal" class="stat-value num">$0.00</div></div>
+      </div>
+      <div class="stat">
+        <div class="chip-i rose" id="icoSpent"></div>
+        <div><div class="stat-label">Total spent</div><div id="spentVal" class="stat-value num">$0.00</div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="grid">
+    <aside>
+      <div class="card">
+        <div class="card-head">
+          <h2>Accounts</h2>
+          <button class="link" onclick="openModal('accountModal')">+ Add</button>
+        </div>
+        <div id="accountsList"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Assigned vs. spent</h2></div>
+        <div id="chartBox" class="chart-box empty">
+          <canvas id="budgetChart"></canvas>
+          <div class="chart-empty">Your chart appears once you create an envelope.</div>
+        </div>
+      </div>
+    </aside>
+
+    <section class="card">
+      <div class="card-head">
+        <div>
+          <h2>Envelopes</h2>
+          <div class="sub">Give every dollar a job before you spend it.</div>
+        </div>
+        <button class="btn small" onclick="openTransfer()">Move money</button>
+      </div>
+      <div id="envelopeGroups"></div>
+    </section>
+  </div>
+
+  <section class="card tx-card">
+    <div class="card-head">
+      <div>
+        <h2>Transactions</h2>
+        <div class="sub">Every expense logged against an envelope.</div>
+      </div>
+      <div class="filters">
+        <input type="search" id="txSearch" class="field" placeholder="Search payee" oninput="renderTransactions()" aria-label="Search transactions by payee">
+        <select id="txFilter" class="field" onchange="renderTransactions()" aria-label="Filter by envelope"></select>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Payee</th><th>Envelope</th><th>Account</th><th class="r">Amount</th><th></th></tr>
+        </thead>
+        <tbody id="txBody"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Your data is saved in this browser only.</span>
+    <div class="fl">
+      <button onclick="loadSample()">Load sample data</button>
+      <button class="danger" onclick="resetAll()">Erase all data</button>
+    </div>
+  </div>
+</footer>
+
+<!-- Log expense -->
+<dialog id="expenseModal" aria-labelledby="expTitle">
+  <form id="expenseForm" onsubmit="handleExpense(event)">
+    <div class="dlg-head"><h3 id="expTitle">Log expense</h3><button type="button" class="x" onclick="closeModal('expenseModal')" aria-label="Close">&times;</button></div>
+    <div><label for="expPayee">Payee</label><input class="field" id="expPayee" type="text" required autocomplete="off"></div>
+    <div class="row2">
+      <div><label for="expAmount">Amount</label><input class="field" id="expAmount" type="number" step="0.01" min="0.01" required placeholder="0.00"></div>
+      <div><label for="expDate">Date</label><input class="field" id="expDate" type="date" required></div>
+    </div>
+    <div><label for="expEnvelope">Envelope</label><select class="field" id="expEnvelope" required></select></div>
+    <div><label for="expAccount">Paid from</label><select class="field" id="expAccount" required></select></div>
+    <div class="dlg-actions"><button type="button" class="btn" onclick="closeModal('expenseModal')">Cancel</button><button type="submit" class="btn primary">Save expense</button></div>
+  </form>
+</dialog>
+
+<!-- New envelope -->
+<dialog id="envelopeModal" aria-labelledby="envTitle">
+  <form id="envelopeForm" onsubmit="handleEnvelope(event)">
+    <div class="dlg-head"><h3 id="envTitle">New envelope</h3><button type="button" class="x" onclick="closeModal('envelopeModal')" aria-label="Close">&times;</button></div>
+    <div><label for="envName">Name</label><input class="field" id="envName" type="text" required autocomplete="off"></div>
+    <div><label for="envGroup">Group</label>
+      <select class="field" id="envGroup" required>
+        <option value="Needs">Needs</option><option value="Wants">Wants</option><option value="Goals">Goals and savings</option>
+      </select></div>
+    <div class="row2">
+      <div><label for="envTarget">Monthly goal</label><input class="field" id="envTarget" type="number" step="0.01" min="0" placeholder="0.00"></div>
+      <div><label for="envAssigned">Assign now</label><input class="field" id="envAssigned" type="number" step="0.01" min="0" placeholder="0.00"></div>
+    </div>
+    <div class="dlg-actions"><button type="button" class="btn" onclick="closeModal('envelopeModal')">Cancel</button><button type="submit" class="btn primary">Create envelope</button></div>
+  </form>
+</dialog>
+
+<!-- Move money -->
+<dialog id="transferModal" aria-labelledby="trTitle">
+  <form id="transferForm" onsubmit="handleTransfer(event)">
+    <div class="dlg-head"><h3 id="trTitle">Move money</h3><button type="button" class="x" onclick="closeModal('transferModal')" aria-label="Close">&times;</button></div>
+    <div><label for="trFrom">From</label><select class="field" id="trFrom" required></select></div>
+    <div><label for="trTo">To</label><select class="field" id="trTo" required></select></div>
+    <div><label for="trAmount">Amount</label><input class="field" id="trAmount" type="number" step="0.01" min="0.01" required placeholder="0.00"></div>
+    <div class="dlg-actions"><button type="button" class="btn" onclick="closeModal('transferModal')">Cancel</button><button type="submit" class="btn primary">Move money</button></div>
+  </form>
+</dialog>
+
+<!-- Add account -->
+<dialog id="accountModal" aria-labelledby="accTitle">
+  <form id="accountForm" onsubmit="handleAccount(event)">
+    <div class="dlg-head"><h3 id="accTitle">Add account</h3><button type="button" class="x" onclick="closeModal('accountModal')" aria-label="Close">&times;</button></div>
+    <div><label for="accName">Name</label><input class="field" id="accName" type="text" required autocomplete="off"></div>
+    <div><label for="accType">Type</label>
+      <select class="field" id="accType" onchange="syncAccountLabel()" required>
+        <option value="CHECKING">Checking</option><option value="SAVINGS">Savings</option><option value="CREDIT">Credit card</option>
+      </select></div>
+    <div><label for="accBalance" id="accBalanceLabel">Current balance</label><input class="field" id="accBalance" type="number" step="0.01" min="0" required placeholder="0.00"></div>
+    <div class="dlg-actions"><button type="button" class="btn" onclick="closeModal('accountModal')">Cancel</button><button type="submit" class="btn primary">Add account</button></div>
+  </form>
+</dialog>
+
+<div id="toasts" aria-live="polite"></div>
+
+<script>
+/* ==========================================================================
+   STATE  (all money is stored as integer cents)
+   ========================================================================== */
+const STORAGE_KEY = 'envelopeledger.v2';
+const GROUPS = [
+  { key: 'Needs', label: 'Needs' },
+  { key: 'Wants', label: 'Wants' },
+  { key: 'Goals', label: 'Goals and savings' }
+];
+const GROUP_COLOR = { Needs: '#5b8def', Wants: '#ee7fa6', Goals: '#3fbf86' };
+const TYPE_LABEL = { CHECKING: 'Checking', SAVINGS: 'Savings', CREDIT: 'Credit card' };
+
+/* Line icons */
+const ICONS = {
+  home: '<path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+  cart: '<circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.7 12.4a1 1 0 0 0 1 .8h8.8a1 1 0 0 0 1-.8L20 7H6"/>',
+  bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  utensils: '<path d="M7 3v8M4 3v5a3 3 0 0 0 6 0V3M7 11v10M17 3c-2 2-3 5-3 8h3v10"/>',
+  coffee: '<path d="M4 8h13v6a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5zM17 10h2a2 2 0 0 1 0 4h-2M8 3v2M12 3v2"/>',
+  tv: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8"/>',
+  bag: '<path d="M5 8h14l-1 12H6z"/><path d="M9 8V6a3 3 0 0 1 6 0v2"/>',
+  coin: '<circle cx="12" cy="12" r="9"/><path d="M12 7v10M15 9.5c-.5-1-1.7-1.5-3-1.5-1.7 0-3 .8-3 2s1.3 1.8 3 2 3 .8 3 2-1.3 2-3 2c-1.4 0-2.6-.6-3-1.5"/>',
+  plane: '<path d="M21 3 3 10l7 3 3 7z"/><path d="M10 13l11-10"/>',
+  car: '<path d="M4 16v-5l2-5h12l2 5v5z"/><circle cx="8" cy="17.5" r="1.5"/><circle cx="16" cy="17.5" r="1.5"/>',
+  heart: '<path d="M12 20s-8-4.7-8-10.5A4.5 4.5 0 0 1 12 7a4.5 4.5 0 0 1 8 2.5C20 15.3 12 20 12 20z"/>',
+  gift: '<rect x="3" y="8" width="18" height="4"/><path d="M5 12v9h14v-9M12 8v13M12 8c-2 0-4-1-4-3s3-2 4 0c1-2 4-2 4 0s-2 3-4 3"/>',
+  bank: '<path d="M3 10 12 4l9 6M5 10v8M9 10v8M15 10v8M19 10v8M3 20h18"/>',
+  card: '<rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/>',
+  wallet: '<path d="M3 7a2 2 0 0 1 2-2h13v4"/><path d="M3 7v11a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5a2 2 0 0 1-2-2z"/><circle cx="16.5" cy="14.5" r="1"/>',
+  stack: '<path d="M12 3 3 8l9 5 9-5z"/><path d="M3 13l9 5 9-5"/>',
+  receipt: '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
+  vault: '<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="12" cy="12" r="3.5"/><path d="M12 8.5V6M12 18v-2.5"/>',
+  tag: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1"/>'
+};
+const ico = name => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name] || ICONS.tag}</svg>`;
+
+function iconFor(env) {
+  const n = env.name.toLowerCase();
+  const map = [
+    [/rent|hous|home|mortgage/, 'home'], [/grocer|food|market/, 'cart'],
+    [/util|wifi|internet|electric|power|water|phone/, 'bolt'], [/coffee|cafe/, 'coffee'],
+    [/dining|restaurant|eat|takeout/, 'utensils'], [/subscr|stream|netflix|spotify/, 'tv'],
+    [/shop|cloth|gear|fashion/, 'bag'], [/vacation|travel|trip|holiday/, 'plane'],
+    [/car|gas|fuel|transport|commute/, 'car'], [/health|medic|doctor|gym/, 'heart'],
+    [/gift|donat|charity/, 'gift'], [/emergency|saving|fund|invest|retire/, 'coin']
+  ];
+  for (const [re, name] of map) if (re.test(n)) return name;
+  return env.group === 'Goals' ? 'coin' : env.group === 'Wants' ? 'bag' : 'tag';
+}
+const accIcon = t => t === 'SAVINGS' ? 'vault' : t === 'CREDIT' ? 'card' : 'bank';
+
+let state = loadState();
+let chart = null;
+
+function emptyState() { return { accounts: [], envelopes: [], transactions: [] }; }
+
+function seedState() {
+  const ago = n => { const d = new Date(); d.setDate(d.getDate() - n); return isoDate(d); };
+  return {
+    accounts: [
+      { id: 'acc-1', name: 'Main Checking', type: 'CHECKING', balance: 201167 },
+      { id: 'acc-2', name: 'High-Yield Savings', type: 'SAVINGS', balance: 350000 },
+      { id: 'acc-3', name: 'Rewards Credit Card', type: 'CREDIT', balance: -35000 }
+    ],
+    envelopes: [
+      { id: 'env-1', group: 'Needs', name: 'Housing & Rent', assigned: 180000, target: 180000 },
+      { id: 'env-2', group: 'Needs', name: 'Groceries', assigned: 60000, target: 60000 },
+      { id: 'env-3', group: 'Needs', name: 'Utilities & Wifi', assigned: 25000, target: 25000 },
+      { id: 'env-4', group: 'Wants', name: 'Dining Out', assigned: 15000, target: 25000 },
+      { id: 'env-5', group: 'Wants', name: 'Subscriptions', assigned: 8000, target: 8000 },
+      { id: 'env-6', group: 'Wants', name: 'Shopping & Gear', assigned: 6000, target: 20000 },
+      { id: 'env-7', group: 'Goals', name: 'Emergency Fund', assigned: 300000, target: 500000 },
+      { id: 'env-8', group: 'Goals', name: 'Vacation Trip', assigned: 50000, target: 100000 }
+    ],
+    transactions: [
+      { id: 'tx-1', date: ago(1), payee: "Trader Joe's", envelopeId: 'env-2', accountId: 'acc-1', amount: 12550 },
+      { id: 'tx-2', date: ago(2), payee: 'City Power & Electric', envelopeId: 'env-3', accountId: 'acc-1', amount: 9500 },
+      { id: 'tx-3', date: ago(3), payee: 'Ramen Izakaya', envelopeId: 'env-4', accountId: 'acc-3', amount: 6200 },
+      { id: 'tx-4', date: ago(4), payee: 'Spotify & Netflix', envelopeId: 'env-5', accountId: 'acc-3', amount: 2999 },
+      { id: 'tx-5', date: ago(5), payee: 'Corner Coffee Co.', envelopeId: 'env-4', accountId: 'acc-3', amount: 2000 },
+      { id: 'tx-6', date: ago(6), payee: 'Whole Foods', envelopeId: 'env-2', accountId: 'acc-1', amount: 8420 },
+      { id: 'tx-7', date: ago(7), payee: 'Fiber Internet', envelopeId: 'env-3', accountId: 'acc-1', amount: 6000 },
+      { id: 'tx-8', date: ago(8), payee: 'Basil Garden', envelopeId: 'env-4', accountId: 'acc-3', amount: 3840 },
+      { id: 'tx-9', date: ago(9), payee: 'Outdoor Supply Co.', envelopeId: 'env-6', accountId: 'acc-3', amount: 7230 },
+      { id: 'tx-10', date: ago(10), payee: 'Sunday Market', envelopeId: 'env-2', accountId: 'acc-1', amount: 6275 },
+      { id: 'tx-11', date: ago(12), payee: 'Cloud Storage', envelopeId: 'env-5', accountId: 'acc-3', amount: 1599 },
+      { id: 'tx-12', date: ago(14), payee: 'Apex Property Mgmt', envelopeId: 'env-1', accountId: 'acc-1', amount: 180000 },
+      { id: 'tx-13', date: ago(15), payee: 'Noodle House', envelopeId: 'env-4', accountId: 'acc-3', amount: 2450 }
+    ]
+  };
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const s = JSON.parse(raw);
+      if (s && Array.isArray(s.accounts) && Array.isArray(s.envelopes) && Array.isArray(s.transactions)) return s;
+    }
+  } catch (e) { /* storage unavailable or corrupt */ }
+  return seedState();
+}
+function saveState() { try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+
+/* ==========================================================================
+   HELPERS
+   ========================================================================== */
+const usd = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+const fmt = c => usd.format(c / 100);
+const toCents = v => Math.round(parseFloat(v) * 100);
+const uid = p => p + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+function isoDate(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function prettyDate(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/* ==========================================================================
+   CALCULATIONS
+   ========================================================================== */
+const spentFor = id => state.transactions.filter(t => t.envelopeId === id).reduce((s, t) => s + t.amount, 0);
+const availableFor = env => env.assigned - spentFor(env.id);
+const cashOnHand = () => state.accounts.filter(a => a.type !== 'CREDIT').reduce((s, a) => s + a.balance, 0);
+const totalAssigned = () => state.envelopes.reduce((s, e) => s + e.assigned, 0);
+const totalSpent = () => state.transactions.reduce((s, t) => s + t.amount, 0);
+
+// All account balances (credit cards are negative) minus money sitting in envelopes.
+// Overspent envelopes count as zero, so overspending reduces what is ready to assign.
+function readyToAssign() {
+  const net = state.accounts.reduce((s, a) => s + a.balance, 0);
+  const inEnv = state.envelopes.reduce((s, e) => s + Math.max(0, availableFor(e)), 0);
+  return net - inEnv;
+}
+
+/* ==========================================================================
+   RENDER
+   ========================================================================== */
+function renderAll() {
+  renderSummary();
+  renderAccounts();
+  renderEnvelopes();
+  renderDropdowns();
+  renderTransactions();
+  renderChart();
+  saveState();
+}
+
+function renderSummary() {
+  const ready = readyToAssign();
+  const el = $('readyVal');
+  el.textContent = fmt(ready);
+  el.className = 'hero-value num' + (ready < 0 ? ' neg' : ready === 0 ? ' zero' : '');
+
+  let note;
+  if (state.accounts.length === 0) note = 'Add an account to start budgeting.';
+  else if (ready > 0) note = 'Assign this money to your envelopes.';
+  else if (ready < 0) note = 'You have assigned more than you have.';
+  else note = 'Every dollar has a job.';
+  $('readyNote').textContent = note;
+
+  $('cashVal').textContent = fmt(cashOnHand());
+  $('assignedVal').textContent = fmt(totalAssigned());
+  $('spentVal').textContent = fmt(totalSpent());
+  $('icoCash').innerHTML = ico('wallet');
+  $('icoAssigned').innerHTML = ico('stack');
+  $('icoSpent').innerHTML = ico('receipt');
+
+  renderAllocation(ready);
+}
+
+function renderAllocation(ready) {
+  const block = $('allocBlock');
+  const segs = state.envelopes
+    .map(e => ({ env: e, v: Math.max(0, availableFor(e)) }))
+    .filter(s => s.v > 0);
+  const readyPos = Math.max(0, ready);
+  const total = segs.reduce((s, x) => s + x.v, 0) + readyPos;
+
+  if (total <= 0) { block.style.display = 'none'; return; }
+  block.style.display = '';
+
+  const op = i => (1 - (i % 3) * 0.18).toFixed(2);
+  $('allocBar').innerHTML =
+    segs.map((s, i) => `<span title="${esc(s.env.name)}: ${fmt(s.v)}" style="flex:${s.v};background:${GROUP_COLOR[s.env.group]};opacity:${op(i)}"></span>`).join('') +
+    (readyPos > 0 ? `<span class="ready" title="Ready to assign: ${fmt(readyPos)}" style="flex:${readyPos}"></span>` : '');
+
+  const sums = {};
+  segs.forEach(s => { sums[s.env.group] = (sums[s.env.group] || 0) + s.v; });
+  $('allocLegend').innerHTML =
+    GROUPS.filter(g => sums[g.key]).map(g => `<span><i class="dot" style="background:${GROUP_COLOR[g.key]}"></i>${g.label}<b class="num">${fmt(sums[g.key])}</b></span>`).join('') +
+    (readyPos > 0 ? `<span><i class="dot" style="background:#dcdff5"></i>Ready<b class="num">${fmt(readyPos)}</b></span>` : '');
+}
+
+function renderAccounts() {
+  const el = $('accountsList');
+  if (state.accounts.length === 0) {
+    el.innerHTML = `<div class="empty"><span>No accounts yet. Add the bank accounts you want to budget with.</span><button class="btn small" onclick="openModal('accountModal')">Add account</button></div>`;
+    return;
+  }
+  el.innerHTML = state.accounts.map(a => {
+    const owed = a.type === 'CREDIT' && a.balance < 0;
+    const tint = a.type === 'CREDIT' ? 'rose' : a.type === 'SAVINGS' ? 'violet' : 'blue';
+    return `
+      <div class="acc-row">
+        <div class="chip-i ${tint}">${ico(accIcon(a.type))}</div>
+        <div class="acc-info">
+          <div class="acc-name">${esc(a.name)}</div>
+          <div class="acc-type">${TYPE_LABEL[a.type] || a.type}</div>
+        </div>
+        <div class="acc-bal num">${fmt(owed ? -a.balance : a.balance)}${owed ? '<small>owed</small>' : ''}</div>
+      </div>`;
+  }).join('');
+}
+
+function renderEnvelopes() {
+  const el = $('envelopeGroups');
+  if (state.envelopes.length === 0) {
+    el.innerHTML = `<div class="empty"><span>No envelopes yet. Create one for each job your money needs to do, like rent, groceries, or savings.</span><button class="btn small" onclick="openModal('envelopeModal')">New envelope</button></div>`;
+    return;
+  }
+  el.innerHTML = GROUPS.map(g => {
+    const list = state.envelopes.filter(e => e.group === g.key);
+    if (!list.length) return '';
+    const assigned = list.reduce((s, e) => s + e.assigned, 0);
+    return `
+      <div class="group g-${g.key}">
+        <div class="group-title"><i class="dot" style="background:var(--gc);margin:0"></i>${g.label}<small class="num">${fmt(assigned)} assigned</small></div>
+        <div class="env-grid">${list.map(envelopeCard).join('')}</div>
+      </div>`;
+  }).join('');
+}
+
+function envelopeCard(env) {
+  const spent = spentFor(env.id);
+  const avail = env.assigned - spent;
+  const over = spent > env.assigned;
+  const pct = env.assigned > 0 ? Math.min(Math.round(spent / env.assigned * 100), 100) : (spent > 0 ? 100 : 0);
+
+  let barClass = '', status;
+  if (over) { barClass = 'bad'; status = `<span class="status-bad">Over by ${fmt(spent - env.assigned)}</span>`; }
+  else if (env.assigned === 0) { status = 'Not funded'; }
+  else if (pct >= 85) { barClass = 'warn'; status = `<span class="status-warn">${pct}% used</span>`; }
+  else { status = `${pct}% used`; }
+
+  const availClass = avail < 0 ? 'neg' : avail === 0 ? 'zero' : '';
+  return `
+    <div class="env">
+      <div class="env-top">
+        <div class="chip-i">${ico(iconFor(env))}</div>
+        <div class="env-title">
+          <div class="env-name">${esc(env.name)}</div>
+          <div class="env-goal num">${env.target > 0 ? 'Goal ' + fmt(env.target) + '/mo' : 'No goal set'}</div>
+        </div>
+        <div class="env-avail num ${availClass}">${fmt(avail)}<small>available</small></div>
+      </div>
+      <div class="bar ${barClass}"><span style="width:${pct}%"></span></div>
+      <div class="env-meta num"><span>Spent ${fmt(spent)} of ${fmt(env.assigned)}</span><span>${status}</span></div>
+      <div class="quick">
+        <span>Add money</span>
+        <button class="pill-btn" onclick="quickAssign('${env.id}', 1000)">+$10</button>
+        <button class="pill-btn" onclick="quickAssign('${env.id}', 5000)">+$50</button>
+        <button class="pill-btn" onclick="quickAssign('${env.id}', 10000)">+$100</button>
+      </div>
+    </div>`;
+}
+
+function renderDropdowns() {
+  const envOpts = state.envelopes.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join('');
+  $('expEnvelope').innerHTML = envOpts;
+  $('trTo').innerHTML = envOpts;
+  $('trFrom').innerHTML = `<option value="READY">Ready to assign (${fmt(readyToAssign())})</option>` + envOpts;
+  $('expAccount').innerHTML = state.accounts.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('');
+
+  const filter = $('txFilter');
+  const current = filter.value || 'ALL';
+  filter.innerHTML = `<option value="ALL">All envelopes</option>` + envOpts;
+  filter.value = state.envelopes.some(e => e.id === current) ? current : 'ALL';
+}
+
+function renderTransactions() {
+  const q = $('txSearch').value.trim().toLowerCase();
+  const cat = $('txFilter').value || 'ALL';
+  const body = $('txBody');
+
+  if (state.transactions.length === 0) {
+    body.innerHTML = `<tr><td colspan="6" class="tx-empty">No transactions yet. Log an expense to see it here.</td></tr>`;
+    return;
+  }
+  const rows = state.transactions
+    .filter(t => t.payee.toLowerCase().includes(q) && (cat === 'ALL' || t.envelopeId === cat))
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  if (rows.length === 0) {
+    body.innerHTML = `<tr><td colspan="6" class="tx-empty">No transactions match your search.</td></tr>`;
+    return;
+  }
+  body.innerHTML = rows.map(t => {
+    const env = state.envelopes.find(e => e.id === t.envelopeId);
+    const acc = state.accounts.find(a => a.id === t.accountId);
+    return `
+      <tr>
+        <td class="muted num">${prettyDate(t.date)}</td>
+        <td class="payee">${esc(t.payee)}</td>
+        <td>${env ? `<span class="tag g-${env.group}">${esc(env.name)}</span>` : '<span class="muted">Uncategorized</span>'}</td>
+        <td class="muted">${acc ? esc(acc.name) : 'Unknown'}</td>
+        <td class="r num amt">-${fmt(t.amount)}</td>
+        <td class="r"><button class="del" onclick="deleteTransaction('${t.id}')" title="Delete and refund this expense">Delete</button></td>
+      </tr>`;
+  }).join('');
+}
+
+function renderChart() {
+  const box = $('chartBox');
+  if (chart) { chart.destroy(); chart = null; }
+  if (state.envelopes.length === 0 || typeof Chart === 'undefined') { box.classList.add('empty'); return; }
+  box.classList.remove('empty');
+
+  const tick = { color: '#a3a7bb', font: { family: 'Plus Jakarta Sans', size: 10 } };
+  chart = new Chart($('budgetChart').getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels: state.envelopes.map(e => e.name),
+      datasets: [
+        { label: 'Assigned', data: state.envelopes.map(e => e.assigned / 100), backgroundColor: '#dfe2f6', borderRadius: 6, borderSkipped: false, maxBarThickness: 18 },
+        { label: 'Spent', data: state.envelopes.map(e => spentFor(e.id) / 100), backgroundColor: '#5b5bf0', borderRadius: 6, borderSkipped: false, maxBarThickness: 18 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: { duration: 350 },
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 8, boxHeight: 8, usePointStyle: true, color: '#6b7088', font: { family: 'Plus Jakarta Sans', size: 11 } } },
+        tooltip: { callbacks: { label: c => ` ${c.dataset.label}: ${usd.format(c.parsed.y)}` } }
+      },
+      scales: {
+        x: { grid: { display: false }, border: { display: false }, ticks: { ...tick, maxRotation: 0, autoSkip: true,
+              callback(v) { const l = this.getLabelForValue(v); return l.length > 9 ? l.slice(0, 8) + '…' : l; } } },
+        y: { beginAtZero: true, border: { display: false }, grid: { color: '#f1f2f9' }, ticks: { ...tick, callback: v => '$' + v } }
+      }
+    }
+  });
+}
+
+/* ==========================================================================
+   ACTIONS
+   ========================================================================== */
+function quickAssign(envId, cents) {
+  const env = state.envelopes.find(e => e.id === envId);
+  if (!env) return;
+  if (readyToAssign() < cents) { toast(`Only ${fmt(Math.max(0, readyToAssign()))} is ready to assign.`, true); return; }
+  env.assigned += cents;
+  renderAll();
+  toast(`Added ${fmt(cents)} to ${env.name}`);
+}
+
+function openExpense() {
+  if (state.accounts.length === 0 || state.envelopes.length === 0) { toast('Add an account and an envelope before logging an expense.', true); return; }
+  openModal('expenseModal');
+}
+function openTransfer() {
+  if (state.envelopes.length === 0) { toast('Create an envelope first.', true); return; }
+  openModal('transferModal');
+}
+
+function handleExpense(e) {
+  e.preventDefault();
+  const payee = $('expPayee').value.trim();
+  const amount = toCents($('expAmount').value);
+  const date = $('expDate').value;
+  const envelopeId = $('expEnvelope').value;
+  const accountId = $('expAccount').value;
+
+  if (!payee || !Number.isFinite(amount) || amount <= 0) { toast('Enter a payee and an amount greater than zero.', true); return; }
+  const acc = state.accounts.find(a => a.id === accountId);
+  const env = state.envelopes.find(x => x.id === envelopeId);
+  if (!acc || !env) { toast('Choose an envelope and an account.', true); return; }
+
+  acc.balance -= amount;
+  state.transactions.unshift({ id: uid('tx'), date, payee, envelopeId, accountId, amount });
+  closeModal('expenseModal');
+  renderAll();
+  toast(`Logged ${fmt(amount)} for ${payee}`);
+}
+
+function handleEnvelope(e) {
+  e.preventDefault();
+  const name = $('envName').value.trim();
+  const group = $('envGroup').value;
+  const target = toCents($('envTarget').value) || 0;
+  const assigned = toCents($('envAssigned').value) || 0;
+
+  if (!name) { toast('Give the envelope a name.', true); return; }
+  if (assigned < 0 || target < 0) { toast('Amounts cannot be negative.', true); return; }
+  if (assigned > readyToAssign()) { toast(`Only ${fmt(Math.max(0, readyToAssign()))} is ready to assign.`, true); return; }
+
+  state.envelopes.push({ id: uid('env'), group, name, assigned, target });
+  closeModal('envelopeModal');
+  renderAll();
+  toast(`Created ${name}`);
+}
+
+function handleTransfer(e) {
+  e.preventDefault();
+  const fromId = $('trFrom').value;
+  const toId = $('trTo').value;
+  const amount = toCents($('trAmount').value);
+
+  if (!Number.isFinite(amount) || amount <= 0) { toast('Enter an amount greater than zero.', true); return; }
+  if (fromId === toId) { toast('Choose two different envelopes.', true); return; }
+  const to = state.envelopes.find(x => x.id === toId);
+  if (!to) return;
+
+  if (fromId === 'READY') {
+    if (amount > readyToAssign()) { toast(`Only ${fmt(Math.max(0, readyToAssign()))} is ready to assign.`, true); return; }
+    to.assigned += amount;
+  } else {
+    const from = state.envelopes.find(x => x.id === fromId);
+    if (!from) return;
+    if (amount > availableFor(from)) { toast(`${from.name} only has ${fmt(Math.max(0, availableFor(from)))} available.`, true); return; }
+    from.assigned -= amount;
+    to.assigned += amount;
+  }
+  closeModal('transferModal');
+  renderAll();
+  toast(`Moved ${fmt(amount)}`);
+}
+
+function handleAccount(e) {
+  e.preventDefault();
+  const name = $('accName').value.trim();
+  const type = $('accType').value;
+  const raw = toCents($('accBalance').value);
+  if (!name || !Number.isFinite(raw) || raw < 0) { toast('Enter a name and a balance of zero or more.', true); return; }
+
+  state.accounts.push({ id: uid('acc'), name, type, balance: type === 'CREDIT' ? -raw : raw });
+  closeModal('accountModal');
+  renderAll();
+  toast(`Added ${name}`);
+}
+
+function deleteTransaction(id) {
+  const i = state.transactions.findIndex(t => t.id === id);
+  if (i === -1) return;
+  const tx = state.transactions[i];
+  const acc = state.accounts.find(a => a.id === tx.accountId);
+  if (acc) acc.balance += tx.amount;
+  state.transactions.splice(i, 1);
+  renderAll();
+  toast(`Deleted and refunded ${fmt(tx.amount)}`);
+}
+
+function loadSample() {
+  const hasData = state.accounts.length || state.envelopes.length || state.transactions.length;
+  if (hasData && !confirm('Replace your current data with sample data?')) return;
+  state = seedState();
+  renderAll();
+  toast('Sample data loaded');
+}
+
+function resetAll() {
+  if (!confirm('Erase all accounts, envelopes, and transactions? This cannot be undone.')) return;
+  state = emptyState();
+  renderAll();
+  toast('All data erased');
+}
+
+/* ==========================================================================
+   DIALOGS & TOASTS
+   ========================================================================== */
+function openModal(id) {
+  const dlg = $(id);
+  if (id === 'expenseModal') $('expDate').value = isoDate(new Date());
+  if (id === 'accountModal') syncAccountLabel();
+  renderDropdowns();
+  dlg.showModal();
+  const first = dlg.querySelector('input, select');
+  if (first) first.focus();
+}
+function closeModal(id) {
+  const dlg = $(id);
+  dlg.close();
+  const form = dlg.querySelector('form');
+  if (form) form.reset();
+}
+function syncAccountLabel() {
+  $('accBalanceLabel').textContent = $('accType').value === 'CREDIT' ? 'Amount owed' : 'Current balance';
+}
+document.querySelectorAll('dialog').forEach(d => {
+  d.addEventListener('click', e => { if (e.target === d) closeModal(d.id); });
+});
+
+function toast(msg, isError = false) {
+  const t = document.createElement('div');
+  t.className = 'toast' + (isError ? ' error' : '');
+  t.textContent = msg;
+  $('toasts').appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .25s'; setTimeout(() => t.remove(), 250); }, 2800);
+}
+
+window.addEventListener('DOMContentLoaded', renderAll);
+</script>
+</body>
+</html>
